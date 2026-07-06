@@ -74,6 +74,74 @@ func TestConfigFromEnvRequiresProjectAndCredentials(t *testing.T) {
 	}
 }
 
+func TestConfigFromEnvReadsTokenFromDockerSecretName(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "infisical_token"), []byte("file-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := configFromEnvWithSecretsDir([]string{
+		"INFISICAL_TOKEN=env-token",
+		"INFISICAL_TOKEN_SECRET_NAME=infisical_token",
+		"INFISICAL_PROJECT_ID=project-a",
+	}, tmp)
+	if err != nil {
+		t.Fatalf("configFromEnvWithSecretsDir returned error: %v", err)
+	}
+
+	if cfg.Token != "file-token" {
+		t.Fatalf("Token = %q, want %q", cfg.Token, "file-token")
+	}
+}
+
+func TestConfigFromEnvReadsClientSecretFromDockerSecretName(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "infisical_client_secret"), []byte("file-client-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := configFromEnvWithSecretsDir([]string{
+		"INFISICAL_PROJECT_ID=project-a",
+		"INFISICAL_MACHINE_CLIENT_ID=client-id",
+		"INFISICAL_MACHINE_CLIENT_SECRET=env-client-secret",
+		"INFISICAL_MACHINE_CLIENT_SECRET_SECRET_NAME=infisical_client_secret",
+	}, tmp)
+	if err != nil {
+		t.Fatalf("configFromEnvWithSecretsDir returned error: %v", err)
+	}
+
+	if cfg.ClientSecret != "file-client-secret" {
+		t.Fatalf("ClientSecret = %q, want %q", cfg.ClientSecret, "file-client-secret")
+	}
+}
+
+func TestConfigFromEnvErrorsForMissingDockerSecretFile(t *testing.T) {
+	_, err := configFromEnvWithSecretsDir([]string{
+		"INFISICAL_TOKEN=env-token",
+		"INFISICAL_TOKEN_SECRET_NAME=missing_token",
+		"INFISICAL_PROJECT_ID=project-a",
+	}, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "failed to read Docker secret INFISICAL_TOKEN") {
+		t.Fatalf("error = %v, want Docker secret read error", err)
+	}
+}
+
+func TestConfigFromEnvErrorsForEmptyDockerSecretFile(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "empty_token"), []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := configFromEnvWithSecretsDir([]string{
+		"INFISICAL_TOKEN=env-token",
+		"INFISICAL_TOKEN_SECRET_NAME=empty_token",
+		"INFISICAL_PROJECT_ID=project-a",
+	}, tmp)
+	if err == nil || !strings.Contains(err.Error(), "Docker secret INFISICAL_TOKEN") || !strings.Contains(err.Error(), "is empty") {
+		t.Fatalf("error = %v, want Docker secret empty error", err)
+	}
+}
+
 func TestBuildExportArgs(t *testing.T) {
 	cfg := config{
 		ProjectID:      "project-a",

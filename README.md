@@ -45,8 +45,10 @@ Set these environment variables when running the final container:
 | Variable | Description |
 | --- | --- |
 | `INFISICAL_TOKEN` | Existing machine identity or service token. |
+| `INFISICAL_TOKEN_SECRET_NAME` | Docker secret name mounted at `/run/secrets/<name>` whose contents supply `INFISICAL_TOKEN`. |
 | `INFISICAL_MACHINE_CLIENT_ID` | Universal Auth client ID. Used only when `INFISICAL_TOKEN` is unset. |
 | `INFISICAL_MACHINE_CLIENT_SECRET` | Universal Auth client secret. Used only when `INFISICAL_TOKEN` is unset. |
+| `INFISICAL_MACHINE_CLIENT_SECRET_SECRET_NAME` | Docker secret name mounted at `/run/secrets/<name>` whose contents supply `INFISICAL_MACHINE_CLIENT_SECRET`. |
 | `INFISICAL_PROJECT_ID` | Infisical project ID. Required. |
 | `PROJECT_ID` | Fallback for `INFISICAL_PROJECT_ID`. |
 | `INFISICAL_ENV` | Infisical environment slug, such as `dev`, `staging`, or `prod`. |
@@ -56,6 +58,9 @@ Set these environment variables when running the final container:
 | `INFISICAL_TAGS` | Tag filter, passed as `--tags`. |
 | `INFISICAL_EXPAND` | Optional `true` or `false`, passed as `--expand`. |
 | `INFISICAL_INCLUDE_IMPORTS` | Optional `true` or `false`, passed as `--include-imports`. |
+
+If both a direct credential variable and its `*_SECRET_NAME` variable are set,
+the Docker secret value takes precedence.
 
 Examples:
 
@@ -72,6 +77,15 @@ docker run --rm \
   -e INFISICAL_MACHINE_CLIENT_ID="$INFISICAL_MACHINE_CLIENT_ID" \
   -e INFISICAL_MACHINE_CLIENT_SECRET="$INFISICAL_MACHINE_CLIENT_SECRET" \
   -e INFISICAL_PROJECT_ID="00000000-0000-0000-0000-000000000000" \
+  ghcr.io/your-org/your-app:latest
+```
+
+```sh
+docker run --rm \
+  --secret infisical_token \
+  -e INFISICAL_TOKEN_SECRET_NAME=infisical_token \
+  -e INFISICAL_PROJECT_ID="00000000-0000-0000-0000-000000000000" \
+  -e INFISICAL_ENV="prod" \
   ghcr.io/your-org/your-app:latest
 ```
 

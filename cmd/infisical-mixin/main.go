@@ -17,6 +17,7 @@ import (
 
 const (
 	defaultInfisicalBin = "infisical"
+	defaultSecretsDir   = "/run/secrets"
 	mappingFileName     = "infisical_mapping.yml"
 )
 
@@ -99,11 +100,25 @@ func run(ctx context.Context, appArgs []string, baseEnv []string, workingDir str
 }
 
 func configFromEnv(env []string) (config, error) {
+	return configFromEnvWithSecretsDir(env, defaultSecretsDir)
+}
+
+func configFromEnvWithSecretsDir(env []string, secretsDir string) (config, error) {
 	values := envMap(env)
+
+	token, err := credentialFromDockerSecret(values, "INFISICAL_TOKEN", "INFISICAL_TOKEN_SECRET_NAME", secretsDir)
+	if err != nil {
+		return config{}, err
+	}
+	clientSecret, err := credentialFromDockerSecret(values, "INFISICAL_MACHINE_CLIENT_SECRET", "INFISICAL_MACHINE_CLIENT_SECRET_SECRET_NAME", secretsDir)
+	if err != nil {
+		return config{}, err
+	}
+
 	cfg := config{
-		Token:          values["INFISICAL_TOKEN"],
+		Token:          token,
 		ClientID:       values["INFISICAL_MACHINE_CLIENT_ID"],
-		ClientSecret:   values["INFISICAL_MACHINE_CLIENT_SECRET"],
+		ClientSecret:   clientSecret,
 		ProjectID:      firstNonEmpty(values["INFISICAL_PROJECT_ID"], values["PROJECT_ID"]),
 		Environment:    firstNonEmpty(values["INFISICAL_ENV"], values["INFISICAL_SECRET_ENV"]),
 		APIURL:         values["INFISICAL_API_URL"],
@@ -132,6 +147,29 @@ func configFromEnv(env []string) (config, error) {
 	}
 
 	return cfg, nil
+}
+
+func credentialFromDockerSecret(values map[string]string, credentialEnvName string, secretNameEnvName string, secretsDir string) (string, error) {
+	value := values[credentialEnvName]
+	secretName := values[secretNameEnvName]
+	if secretName == "" {
+		return value, nil
+	}
+	if err := validateDockerSecretName(secretName); err != nil {
+		return "", fmt.Errorf("%s is invalid: %w", secretNameEnvName, err)
+	}
+
+	secretPath := filepath.Join(secretsDir, secretName)
+	data, err := os.ReadFile(secretPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read Docker secret %s from %s: %w", credentialEnvName, secretPath, err)
+	}
+
+	value = strings.TrimSpace(string(data))
+	if value == "" {
+		return "", fmt.Errorf("Docker secret %s from %s is empty", credentialEnvName, secretPath)
+	}
+	return value, nil
 }
 
 func buildLoginArgs(cfg config) []string {
@@ -382,6 +420,16 @@ func validateEnvName(name string) error {
 	}
 	if strings.Contains(name, "=") {
 		return errors.New("name cannot contain '='")
+	}
+	return nil
+}
+
+func validateDockerSecretName(name string) error {
+	if name == "" {
+		return errors.New("name cannot be empty")
+	}
+	if filepath.IsAbs(name) || strings.ContainsRune(name, os.PathSeparator) || name == "." || name == ".." {
+		return errors.New("name must be a file name under /run/secrets")
 	}
 	return nil
 }
